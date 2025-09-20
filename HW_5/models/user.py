@@ -1,46 +1,43 @@
-import re
-import sqlite3
 from db.database import get_connection
+from utils.validators import validate_email
+from mysql.connector import IntegrityError
 
 class User:
     def __init__(self, username, password, email):
+        if not validate_email(email):
+            raise ValueError("❌ Некоректний email")
         self.username = username
         self.password = password
         self.email = email
 
-    def is_valid_email(self):
-        """Перевірка email через regex"""
-        pattern = r'^[\w\.-]+@[\w\.-]+\.\w{2,}$'
-        return re.match(pattern, self.email) is not None
-
     def register(self):
-        """Реєстрація користувача у БД"""
-        if not self.is_valid_email():
-            raise ValueError(f"Невалідний email: {self.email}")
-
+        """Реєстрація користувача в MySQL."""
+        self.username = self.username.strip().lower()
+        conn = get_connection()
+        cursor = conn.cursor()
         try:
-            conn = get_connection()
-            cursor = conn.cursor()
             cursor.execute(
-                "INSERT INTO users (username, password, email) VALUES (?, ?, ?)",
+                "INSERT INTO users (username, password, email) VALUES (%s, %s, %s)",
                 (self.username, self.password, self.email)
             )
             conn.commit()
             return True
-        except sqlite3.IntegrityError as e:
-            print(f"Помилка реєстрації: {e}")
+        except IntegrityError:
             return False
         finally:
+            cursor.close()
             conn.close()
 
-    @classmethod
-    def login(cls, username, password):
+    @staticmethod
+    def login(username, password):
         conn = get_connection()
         cursor = conn.cursor()
+        username_clean = username.strip().lower()
         cursor.execute(
-            "SELECT * FROM users WHERE username = ? AND password = ?",
-            (username, password)
+            "SELECT id FROM users WHERE LOWER(username)=%s AND password=%s",
+            (username_clean, password)
         )
-        user = cursor.fetchone()
+        result = cursor.fetchone()
+        cursor.close()
         conn.close()
-        return user is not None
+        return bool(result)

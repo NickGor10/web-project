@@ -1,38 +1,68 @@
-import os
 import pytest
 from db.database import init_db, get_connection
 
-TEST_DB = "test_users.db"
-
 @pytest.fixture(autouse=True)
-def setup_test_db(monkeypatch):
-    """Фікстура: створює тестову БД перед кожним тестом."""
-    monkeypatch.setattr("db.database.DB_NAME", TEST_DB)
-    if os.path.exists(TEST_DB):
-        os.remove(TEST_DB)
+def setup_and_cleanup():
+    """Перед кожним тестом створюємо таблицю, після — очищаємо."""
+    init_db()
     yield
-    if os.path.exists(TEST_DB):
-        os.remove(TEST_DB)
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute("DELETE FROM users")
+    conn.commit()
+    conn.close()
 
-def test_database_initialization():
-    """Перевірка, що таблиця users створюється успішно"""
+def test_database_connection():
+    """Перевірка підключення до MySQL"""
+    conn = get_connection()
+    assert conn.is_connected()
+    conn.close()
+
+def test_create_table():
     init_db()
     conn = get_connection()
     cursor = conn.cursor()
-    cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='users'")
-    table = cursor.fetchone()
+    cursor.execute("SHOW TABLES LIKE 'users'")
+    assert cursor.fetchone() is not None
     conn.close()
-    assert table is not None, "Таблиця 'users' не була створена"
 
 def test_insert_and_select_user():
-    """Перевірка, що можна вставити користувача без помилок"""
-    init_db()
+    """Перевірка вставки користувача та отримання його з MySQL"""
     conn = get_connection()
-    cur = conn.cursor()
-    cur.execute("INSERT INTO users (username, password, email) VALUES (?, ?, ?)",
-                ("alice", "pass123", "alice@example.com"))
+    cursor = conn.cursor()
+
+    # Вставляємо тестового користувача
+    cursor.execute(
+        "INSERT INTO users (username, password, email) VALUES (%s, %s, %s)",
+        ("alice", "pass123", "alice@example.com")
+    )
     conn.commit()
-    cur.execute("SELECT username, email FROM users WHERE username = ?", ("alice",))
-    user = cur.fetchone()
+
+    # Отримуємо дані назад
+    cursor.execute("SELECT username, email FROM users WHERE username = %s", ("alice",))
+    user = cursor.fetchone()
     conn.close()
-    assert user == ("alice", "alice@example.com")
+
+    assert user is not None
+    assert user[0] == "alice"
+    assert user[1] == "alice@example.com"
+
+def test_insert_duplicate_user_fails():
+    """Перевірка, що дубльовані username/email не додаються"""
+    conn = get_connection()
+    cursor = conn.cursor()
+
+    cursor.execute(
+        "INSERT INTO users (username, password, email) VALUES (%s, %s, %s)",
+        ("bob", "secret", "bob@example.com")
+    )
+    conn.commit()
+
+    with pytest.raises(Exception):
+        cursor.execute(
+            "INSERT INTO users (username, password, email) VALUES (%s, %s, %s)",
+            ("bob", "secret", "bob@example.com")
+        )
+        conn.commit()
+
+    conn.close()
