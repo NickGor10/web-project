@@ -62,8 +62,3 @@ pip install -r requirements.txt
 ```commandline
 python main.py
 ```
-
-### 🧪 Тести
-```commandline
-pytest -q
-```

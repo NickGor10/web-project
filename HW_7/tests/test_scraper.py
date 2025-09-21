@@ -3,7 +3,7 @@ from scraper.base_scraper import BaseScraper
 from db.database import init_db
 from db.models import Product
 
-# Конфіг прикладового сайту (універсальний для тестів)
+# Конфіг сайту
 SITES_CONFIG = {
     "allo": {
         "url": "https://fake-all-site.com/page={page}",
