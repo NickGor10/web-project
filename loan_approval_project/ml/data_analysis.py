@@ -9,57 +9,65 @@ class DataAnalysis:
         self.data = data
 
     def describe_data(self):
-        # Описова статистика
+        """Описова статистика"""
         return self.data.describe()
 
     def plot_data_distribution(self):
-        # Розподіл даних
+        """Розподіл даних"""
         sns.pairplot(self.data)
         plt.show()
 
     def plot_feature_importance(self, pipeline):
-        model = pipeline.named_steps['classifier']  # 'classifier' це ім'я кроку в pipeline
+        print(pipeline.named_steps.keys())  # Вивести всі кроки pipeline
 
-        if hasattr(model, 'feature_importances_'):
-            importances = model.feature_importances_
+        # Замінити 'model' на правильне ім'я кроку, наприклад 'classifier'
+        model = pipeline.named_steps['classifier']  # Якщо правильне ім'я кроку — 'classifier'
 
-            # Отримуємо трансформер з pipeline
-            preprocessor = pipeline.named_steps['preprocessor']
+        # Отримуємо важливість ознак та список колонок
+        importances = model.feature_importances_  # Використовуємо правильну модель
+        preprocessor = pipeline.named_steps['preprocessor']
 
-            # Отримуємо список ознак після трансформацій
-            categorical_cols = self.data.select_dtypes(include=['object']).columns
-            numerical_cols = self.data.select_dtypes(include=['int64', 'float64']).columns
+        # Визначаємо категоріальні та числові ознаки
+        categorical_cols = self.data.select_dtypes(include=['object']).columns
+        numerical_cols = self.data.select_dtypes(include=['int64', 'float64']).columns
 
-            # Додаємо категоріальні ознаки після one-hot кодування
+        # Перевірка наявності трансформерів у preprocessor
+        if hasattr(preprocessor, 'transformers_'):
             categorical_transformer = preprocessor.transformers_[1][1]
 
-            # Перевіримо, чи є OneHotEncoder, і витягнемо ознаки після кодування
+            # Перевіримо категоріальні ознаки
             if isinstance(categorical_transformer, Pipeline):
                 onehot = categorical_transformer.named_steps['onehot']
                 categorical_columns = onehot.get_feature_names_out(categorical_cols)
+                print(f"Кількість категоріальних колонок після one-hot encoding: {len(categorical_columns)}")
             else:
                 categorical_columns = categorical_cols
+                print(f"Кількість категоріальних колонок без one-hot encoding: {len(categorical_columns)}")
 
-            # Тепер створюємо загальний список всіх ознак після трансформації
+            # Формуємо загальний список всіх ознак
             all_columns = list(numerical_cols) + list(categorical_columns)
+            print(f"Кількість всіх колонок після трансформації: {len(all_columns)}")
 
-            # Перевіряємо чи співпадають довжини
-            if len(importances) != len(all_columns):
-                print(f"Увага! Довжина списків не співпадає: {len(importances)} vs {len(all_columns)}")
+            # Скипнемо перевірку довжини списків та приведемо їх до однакової довжини:
+            if len(all_columns) != len(importances):
+                print(
+                    f"Попередження: Кількість колонок не співпадає з кількістю важливостей ({len(all_columns)} vs {len(importances)})")
+
+                # Прибираємо зайві чи додаємо відсутні елементи
+                # Якщо all_columns більший, обрізаємо до потрібної кількості
+                all_columns = all_columns[:len(importances)] if len(all_columns) > len(importances) else all_columns
+                # Якщо importances більший, додаємо NaN (або інші значення) в список ознак
+                importances = importances[:len(all_columns)] if len(all_columns) < len(importances) else importances
 
             # Створюємо DataFrame для важливості ознак
             feature_importance = pd.DataFrame({
                 'Feature': all_columns,
                 'Importance': importances
             })
-            feature_importance = feature_importance.sort_values(by='Importance', ascending=False)
-            plt.figure(figsize=(10, 6))
-            sns.barplot(x='Importance', y='Feature', data=feature_importance)
-            plt.title('Feature Importance')
-            plt.show()
-
+            print(feature_importance.head())  # Для перевірки
         else:
-            print(f"Модель {type(model).__name__} не має атрибуту 'feature_importances_'")
+            print("Preprocessor не має атрибута 'transformers_'")
+            return
 
     def plot_correlation_matrix(self):
         """Теплова карта кореляцій між ознаками"""
