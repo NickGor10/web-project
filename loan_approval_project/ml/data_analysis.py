@@ -20,61 +20,47 @@ class DataAnalysis:
         self.save_plot('data_distribution.png')
         plt.close()
 
-    def plot_feature_importance(self, pipeline):
+    def plot_feature_importance(self, pipeline, feature_names):
         """Візуалізація важливості ознак"""
-        print(f"Pipeline steps: {pipeline.named_steps.keys()}")  # Вивести всі кроки pipeline
+        print(f"Pipeline steps: {pipeline.named_steps.keys()}")
 
         # Отримуємо модель з pipeline
-        model = pipeline.named_steps['classifier']  # Потрібно вказати правильний крок у пайплайні
+        model = pipeline.named_steps['classifier']
 
         # Отримуємо важливість ознак
         importances = model.feature_importances_
 
-        # Перевіряємо, чи є preprocessor і як ми можемо отримати всі ознаки після трансформацій
+        # Отримуємо preprocessor
         preprocessor = pipeline.named_steps['preprocessor']
 
-        # Якщо є трансформери, отримуємо всі ознаки після one-hot encoding
-        if hasattr(preprocessor, 'transformers_'):
-            categorical_cols = self.data.select_dtypes(include=['object']).columns
-            numerical_cols = self.data.select_dtypes(include=['int64', 'float64']).columns
+        # ВИПРАВЛЕННЯ: Отримуємо трансформовані назви колонок
+        transformed_features = preprocessor.get_feature_names_out(feature_names)
 
-            if hasattr(preprocessor, 'transformers_'):
-                # Отримуємо категоріальні ознаки після one-hot encoding
-                categorical_transformer = preprocessor.transformers_[1][1]
-                if isinstance(categorical_transformer, Pipeline):
-                    onehot = categorical_transformer.named_steps['onehot']
-                    categorical_columns = onehot.get_feature_names_out(categorical_cols)
+        print(f"Кількість ознак після трансформації: {len(transformed_features)}")
+        print(f"Кількість важливостей: {len(importances)}")
 
-                    # Всі ознаки після трансформації
-                    all_columns = list(numerical_cols) + list(categorical_columns)
-                    print(f"Кількість всіх колонок після трансформації: {len(all_columns)}")
-                else:
-                    categorical_columns = categorical_cols
-                    all_columns = list(numerical_cols) + list(categorical_columns)
-
-                # Перевіряємо відповідність кількості ознак і важливостей
-                if len(all_columns) != len(importances):
-                    print(f"Попередження: Кількість колонок не співпадає з кількістю важливостей ({len(all_columns)} vs {len(importances)})")
-                    all_columns = all_columns[:len(importances)] if len(all_columns) > len(importances) else all_columns
-                    importances = importances[:len(all_columns)] if len(all_columns) < len(importances) else importances
-
-                # Створюємо DataFrame для важливості ознак
-                feature_importance = pd.DataFrame({
-                    'Feature': all_columns,
-                    'Importance': importances
-                })
-                feature_importance = feature_importance.sort_values(by='Importance', ascending=False)
-                print(feature_importance.head())  # Перевірка
-        else:
-            print("Preprocessor не має атрибута 'transformers_'")
+        # Перевірка відповідності
+        if len(transformed_features) != len(importances):
+            print(
+                f"⚠️ Попередження: кількість важливостей ({len(importances)}) не співпадає з кількістю ознак ({len(transformed_features)})")
             return
 
-        # Візуалізація
-        plt.figure(figsize=(10, 6))
-        sns.barplot(x='Importance', y='Feature', data=feature_importance)
-        plt.title("Feature Importance")
+        # Створюємо DataFrame для важливості ознак
+        feature_importance = pd.DataFrame({
+            'Feature': transformed_features,
+            'Importance': importances
+        })
+        feature_importance = feature_importance.sort_values(by='Importance', ascending=False)
+
+        # Візуалізація топ-20 найважливіших ознак
+        plt.figure(figsize=(10, 8))
+        top_features = feature_importance.head(20)
+        sns.barplot(x='Importance', y='Feature', data=top_features)
+        plt.title("Топ-20 найважливіших ознак")
         self.save_plot('feature_importance.png')
         plt.close()
+
+        print(feature_importance.head(10))
 
     def plot_correlation_matrix(self):
         """Теплова карта кореляцій між ознаками"""

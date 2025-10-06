@@ -42,6 +42,9 @@ def main():
 
     # Виводимо важливість ознак
     analysis = DataAnalysis(processed_data)
+    feature_names = X_train.columns
+    analysis.plot_feature_importance(pipeline, feature_names)
+
     analysis.plot_feature_importance(pipeline)  # Передаємо pipeline замість importances та all_columns
 
     # Ініціалізація для візуалізації
